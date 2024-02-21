@@ -19,12 +19,17 @@ kotlin {
         implementation(compose.runtime)
         implementation(compose.foundation)
         implementation(Compose.multiplatformUiUtil)
+
       }
     }
     val commonTest by getting
 
     val androidMain by getting {
       kotlin.srcDir("src/commonJvmAndroid/kotlin")
+
+      dependencies {
+        implementation("me.saket.extendedspans:extendedspans:1.3.0")
+      }
     }
     val jvmMain by getting {
       kotlin.srcDir("src/commonJvmAndroid/kotlin")

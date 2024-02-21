@@ -15,6 +15,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import com.halilibo.richtext.ui.util.detectTapGesturesIf
 
 /**
@@ -74,7 +75,7 @@ public fun RichTextScope.Text(
 }
 
 @Composable
-public fun RichTextScope.Text(
+public expect fun RichTextScope.Text(
   text: AnnotatedString,
   modifier: Modifier = Modifier,
   onTextLayout: (TextLayoutResult) -> Unit = {},
@@ -82,21 +83,7 @@ public fun RichTextScope.Text(
   softWrap: Boolean = true,
   maxLines: Int = Int.MAX_VALUE,
   inlineContent: Map<String, InlineTextContent> = mapOf(),
-) {
-  val textColor = currentTextStyle.color.takeOrElse { currentContentColor }
-  val style = currentTextStyle.copy(color = textColor)
-
-  BasicText(
-    text = text,
-    modifier = modifier,
-    style = style,
-    onTextLayout = onTextLayout,
-    overflow = overflow,
-    softWrap = softWrap,
-    maxLines = maxLines,
-    inlineContent = inlineContent
-  )
-}
+)
 
 /**
  * Default ClickableText implementation from Compose does not take inlineContent for some reason.
