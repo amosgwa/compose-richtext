@@ -6,7 +6,6 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -14,6 +13,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.halilibo.richtext.ui.DefaultCodeBlockBackgroundColor
 import com.halilibo.richtext.ui.string.RichTextString.Builder
@@ -35,6 +35,29 @@ import kotlin.LazyThreadSafetyMode.NONE
 internal const val REPLACEMENT_CHAR: String = "\uFFFD"
 
 /**
+ * Code style block for inline code. This style represents the highlight behind the inline code.
+ * @param cornerRadius The corner radius of the highlight.
+ * @param verticalPadding The padding above and below the text.
+ * @param horizontalPadding The padding to the left and right of the text.
+ *  @param topMargin Positive margin pushes the box downward.
+ *  @param bottomMargin Positive margin pushes the box upward.
+ *  @param borderStrokeColor The color of the border stroke.
+ *  @param borderStrokeWidth The width of the border stroke.
+ *  @param spanStyle The [SpanStyle] to use for the text inside the highlight.
+ */
+@Immutable
+public data class InlineCodeStyle(
+  val cornerRadius: TextUnit,
+  val verticalPadding: TextUnit,
+  val horizontalPadding: TextUnit,
+  val topMargin: TextUnit,
+  val bottomMargin: TextUnit,
+  val borderStrokeColor: Color,
+  val borderStrokeWidth: TextUnit,
+  val spanStyle: SpanStyle
+)
+
+/**
  * Defines the [SpanStyle]s that are used for various [RichTextString] formatting directives.
  */
 @Immutable
@@ -45,7 +68,7 @@ public data class RichTextStringStyle(
   val strikethroughStyle: SpanStyle? = null,
   val subscriptStyle: SpanStyle? = null,
   val superscriptStyle: SpanStyle? = null,
-  val codeStyle: SpanStyle? = null,
+  val codeStyle: InlineCodeStyle? = null,
   val linkStyle: SpanStyle? = null
 ) {
   internal fun merge(otherStyle: RichTextStringStyle?): RichTextStringStyle {
@@ -57,7 +80,7 @@ public data class RichTextStringStyle(
       strikethroughStyle = strikethroughStyle.merge(otherStyle.strikethroughStyle),
       subscriptStyle = subscriptStyle.merge(otherStyle.subscriptStyle),
       superscriptStyle = superscriptStyle.merge(otherStyle.superscriptStyle),
-      codeStyle = codeStyle.merge(otherStyle.codeStyle),
+      codeStyle = codeStyle?.copy(spanStyle = codeStyle.spanStyle.merge(otherStyle.codeStyle?.spanStyle)),
       linkStyle = linkStyle.merge(otherStyle.linkStyle)
     )
   }
@@ -70,7 +93,7 @@ public data class RichTextStringStyle(
       strikethroughStyle = strikethroughStyle ?: Strikethrough.DefaultStyle,
       subscriptStyle = subscriptStyle ?: Subscript.DefaultStyle,
       superscriptStyle = superscriptStyle ?: Superscript.DefaultStyle,
-      codeStyle = codeStyle ?: Code.DefaultStyle,
+      codeStyle = codeStyle ?: Code.DefaultInlineCodeStyle,
       linkStyle = linkStyle ?: Link.DefaultStyle
     )
 
@@ -204,7 +227,22 @@ public data class RichTextString internal constructor(
     }
 
     public object Code : Format("code") {
-      public val DefaultStyle: SpanStyle = SpanStyle(
+      public val DefaultInlineCodeStyle: InlineCodeStyle = InlineCodeStyle(
+        cornerRadius = 2.sp,
+        verticalPadding = 0.sp,
+        horizontalPadding = 0.sp,
+        topMargin = 0.sp,
+        bottomMargin = 0.sp,
+        borderStrokeColor = Color.Gray,
+        borderStrokeWidth = 1.sp,
+        spanStyle = SpanStyle(
+          fontFamily = FontFamily.Monospace,
+          fontWeight = FontWeight.Medium,
+          background = DefaultCodeBlockBackgroundColor
+        )
+      )
+
+      public val DefaultSpanStyle: SpanStyle = SpanStyle(
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.Medium,
         background = DefaultCodeBlockBackgroundColor
@@ -213,7 +251,7 @@ public data class RichTextString internal constructor(
       override fun getStyle(
         richTextStyle: RichTextStringStyle,
         contentColor: Color
-      ) = richTextStyle.codeStyle
+      ) = richTextStyle.codeStyle?.spanStyle
     }
 
     public data class Link(val destination: String) : Format() {
