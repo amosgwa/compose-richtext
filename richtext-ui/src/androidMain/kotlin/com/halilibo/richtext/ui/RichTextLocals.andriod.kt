@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.halilibo.richtext.ui.string.RichTextString.Format.Code
 import me.saket.extendedspans.ExtendedSpans
@@ -55,7 +56,17 @@ public actual fun RichTextScope.Text(
       extendedSpans.extend(text)
     },
     modifier = modifier.drawBehind(extendedSpans),
-    style = style,
+    style = style.merge(
+      color = textColor,
+      fontSize = currentTextStyle.fontSize,
+      fontWeight = currentTextStyle.fontWeight,
+      textAlign = currentTextStyle.textAlign ?: TextAlign.Start,
+      lineHeight = currentTextStyle.lineHeight,
+      fontFamily = currentTextStyle.fontFamily,
+      textDecoration = currentTextStyle.textDecoration,
+      fontStyle = currentTextStyle.fontStyle,
+      letterSpacing = currentTextStyle.letterSpacing
+    ),
     onTextLayout = {
       extendedSpans.onTextLayout(it)
       onTextLayout(it)
