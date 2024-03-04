@@ -65,7 +65,14 @@ public fun RichTextScope.MarkdownRichText(astNode: AstNode, modifier: Modifier =
   Text(text = richText, modifier = modifier)
 }
 
-public fun computeRichTextString(astNode: AstNode): RichTextString {
+public data class RichTextStringOptions(
+  val generateImage: Boolean = true
+)
+
+public fun computeRichTextString(
+  astNode: AstNode,
+  options: RichTextStringOptions = RichTextStringOptions()
+): RichTextString {
   val richTextStringBuilder = RichTextString.Builder()
 
   // Modified pre-order traversal with pushFormat, popFormat support.
@@ -89,45 +96,58 @@ public fun computeRichTextString(astNode: AstNode): RichTextString {
           }
           null
         }
+
         is AstEmphasis -> richTextStringBuilder.pushFormat(RichTextString.Format.Italic)
         is AstStrikethrough -> richTextStringBuilder.pushFormat(
           RichTextString.Format.Strikethrough
         )
+
         is AstImage -> {
-          richTextStringBuilder.appendInlineContent(
-            content = InlineContent(
-              initialSize = {
-                IntSize(128.dp.roundToPx(), 128.dp.roundToPx())
+          if (options.generateImage) {
+            richTextStringBuilder.appendInlineContent(
+              content = InlineContent(
+                initialSize = {
+                  IntSize(128.dp.roundToPx(), 128.dp.roundToPx())
+                }
+              ) {
+                RemoteImage(
+                  url = currentNodeType.destination,
+                  contentDescription = currentNodeType.title,
+                  modifier = Modifier.fillMaxWidth(),
+                  contentScale = ContentScale.Inside
+                )
               }
-            ) {
-              RemoteImage(
-                url = currentNodeType.destination,
-                contentDescription = currentNodeType.title,
-                modifier = Modifier.fillMaxWidth(),
-                contentScale = ContentScale.Inside
-              )
-            }
-          )
+            )
+          }
           null
         }
-        is AstLink -> richTextStringBuilder.pushFormat(RichTextString.Format.Link(
-          destination = currentNodeType.destination
-        ))
+
+        is AstLink -> richTextStringBuilder.pushFormat(
+          RichTextString.Format.Link(
+            destination = currentNodeType.destination
+          )
+        )
+
         is AstSoftLineBreak -> {
           richTextStringBuilder.append(" ")
           null
         }
+
         is AstHardLineBreak -> {
           richTextStringBuilder.append("\n")
           null
         }
+
         is AstStrongEmphasis -> richTextStringBuilder.pushFormat(RichTextString.Format.Bold)
         is AstText -> {
           richTextStringBuilder.append(currentNodeType.literal)
           null
         }
+
         is AstLinkReferenceDefinition -> richTextStringBuilder.pushFormat(
-          RichTextString.Format.Link(destination = currentNodeType.destination))
+          RichTextString.Format.Link(destination = currentNodeType.destination)
+        )
+
         else -> null
       }
 
