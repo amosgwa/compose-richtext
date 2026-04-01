@@ -11,6 +11,7 @@ import com.halilibo.richtext.markdown.node.AstDocument
 import com.halilibo.richtext.markdown.node.AstFencedCodeBlock
 import com.halilibo.richtext.markdown.node.AstHeading
 import com.halilibo.richtext.markdown.node.AstHtmlBlock
+import com.halilibo.richtext.markdown.node.AstIncompleteElement
 import com.halilibo.richtext.markdown.node.AstIndentedCodeBlock
 import com.halilibo.richtext.markdown.node.AstInlineNodeType
 import com.halilibo.richtext.markdown.node.AstLinkReferenceDefinition
@@ -18,6 +19,7 @@ import com.halilibo.richtext.markdown.node.AstListItem
 import com.halilibo.richtext.markdown.node.AstNode
 import com.halilibo.richtext.markdown.node.AstOrderedList
 import com.halilibo.richtext.markdown.node.AstParagraph
+import com.halilibo.richtext.markdown.node.AstParseError
 import com.halilibo.richtext.markdown.node.AstTableBody
 import com.halilibo.richtext.markdown.node.AstTableCell
 import com.halilibo.richtext.markdown.node.AstTableHeader
@@ -239,6 +241,14 @@ private val DefaultAstNodeComposer = object : AstBlockNodeComposer {
       AstTableRow,
       is AstTableCell -> {
         println("MarkdownRichText: Unexpected Table node while traversing the Abstract Syntax Tree.")
+      }
+
+      is AstIncompleteElement -> {
+        Text(richTextString { append(astNodeType.rawContent) })
+      }
+
+      is AstParseError -> {
+        // Silently skip parse errors in rendered output
       }
     }.let {}
   }

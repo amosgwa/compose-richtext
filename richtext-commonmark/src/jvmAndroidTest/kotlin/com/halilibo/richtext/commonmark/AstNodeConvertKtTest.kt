@@ -2,7 +2,9 @@ package com.halilibo.richtext.markdown
 
 import com.halilibo.richtext.commonmark.CommonMarkdownParseOptions
 import com.halilibo.richtext.commonmark.CommonmarkAstNodeParser
+import com.halilibo.richtext.commonmark.FailurePolicy
 import com.halilibo.richtext.commonmark.convert
+import com.halilibo.richtext.commonmark.sanitizePartialMarkdown
 import com.halilibo.richtext.markdown.node.AstBlockQuote
 import com.halilibo.richtext.markdown.node.AstDocument
 import com.halilibo.richtext.markdown.node.AstHeading
@@ -202,6 +204,153 @@ internal class AstNodeConvertKtTest {
     }
     assertEquals(siblingCount, count)
   }
+  // region sanitizePartialMarkdown — incomplete link stripping
+
+  @Test
+  fun `sanitizer strips incomplete link with partial url`() {
+    val input = "Check out [this link](https://exam"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("Check out this link", result)
+  }
+
+  @Test
+  fun `sanitizer strips incomplete link with no url yet`() {
+    val input = "Check out [this link]("
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("Check out this link", result)
+  }
+
+  @Test
+  fun `sanitizer strips unclosed bracket`() {
+    val input = "Check out [this li"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("Check out this li", result)
+  }
+
+  @Test
+  fun `sanitizer strips incomplete image link`() {
+    val input = "See ![alt text](https://example.com/img"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("See alt text", result)
+  }
+
+  @Test
+  fun `sanitizer preserves complete links`() {
+    val input = "Check out [this link](https://example.com) for more"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals(input, result)
+  }
+
+  @Test
+  fun `sanitizer preserves complete image links`() {
+    val input = "See ![alt](https://example.com/img.png) here"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals(input, result)
+  }
+
+  @Test
+  fun `partial parser does not produce clickable link from truncated url`() {
+    val partialParser = CommonmarkAstNodeParser(CommonMarkdownParseOptions.Streaming)
+    val result = partialParser.parse("Click [here](https://partial")
+    assertEquals(AstDocument, result.type)
+    // The paragraph should contain plain text, not a Link node
+    val paragraph = result.links.firstChild
+    assertNotNull(paragraph)
+    assertEquals(AstParagraph, paragraph.type)
+    val textNode = paragraph.links.firstChild
+    assertNotNull(textNode)
+    assertTrue(textNode.type is AstText, "Expected plain text, got: ${textNode.type}")
+  }
+
+  // endregion
+
+  // region sanitizePartialMarkdown — inline delimiter tests
+
+  @Test
+  fun `sanitizer closes unclosed fenced code block`() {
+    val input = "Hello\n```kotlin\nval x = 1"
+    val result = sanitizePartialMarkdown(input)
+    assertTrue(result.endsWith("```"), "Expected closing fence, got: $result")
+  }
+
+  @Test
+  fun `sanitizer closes unclosed tilde fenced code block`() {
+    val input = "Hello\n~~~\nsome code"
+    val result = sanitizePartialMarkdown(input)
+    assertTrue(result.endsWith("~~~"), "Expected closing fence, got: $result")
+  }
+
+  @Test
+  fun `sanitizer does not modify already closed fenced code block`() {
+    val input = "```\ncode\n```"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals(input, result)
+  }
+
+  @Test
+  fun `sanitizer closes unclosed bold delimiter`() {
+    val input = "This is **bold text"
+    val result = sanitizePartialMarkdown(input)
+    assertTrue(result.endsWith("**"), "Expected closing **, got: $result")
+  }
+
+  @Test
+  fun `sanitizer closes unclosed italic delimiter`() {
+    val input = "This is *italic text"
+    val result = sanitizePartialMarkdown(input)
+    assertTrue(result.endsWith("*"), "Expected closing *, got: $result")
+  }
+
+  @Test
+  fun `sanitizer closes unclosed inline code`() {
+    val input = "This is `inline code"
+    val result = sanitizePartialMarkdown(input)
+    assertTrue(result.endsWith("`"), "Expected closing backtick, got: $result")
+  }
+
+  @Test
+  fun `sanitizer closes unclosed strikethrough`() {
+    val input = "This is ~~struck"
+    val result = sanitizePartialMarkdown(input)
+    assertTrue(result.endsWith("~~"), "Expected closing ~~, got: $result")
+  }
+
+  @Test
+  fun `sanitizer does not modify complete markdown`() {
+    val input = "This is **bold** and *italic* and `code` and ~~struck~~"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals(input, result)
+  }
+
+  // endregion
+
+  // region RETURN_PARTIAL failure policy tests
+
+  @Test
+  fun `partial parser does not throw on incomplete markdown`() {
+    val partialParser = CommonmarkAstNodeParser(CommonMarkdownParseOptions.Streaming)
+    val result = partialParser.parse("**unclosed bold and *nested italic")
+    assertEquals(AstDocument, result.type)
+    assertNotNull(result.links.firstChild)
+  }
+
+  @Test
+  fun `partial parser handles empty input`() {
+    val partialParser = CommonmarkAstNodeParser(CommonMarkdownParseOptions.Streaming)
+    val result = partialParser.parse("")
+    assertEquals(AstDocument, result.type)
+  }
+
+  @Test
+  fun `partial parser handles unclosed fenced code block in streaming`() {
+    val partialParser = CommonmarkAstNodeParser(CommonMarkdownParseOptions.Streaming)
+    val result = partialParser.parse("# Title\n\n```kotlin\nval x = 1")
+    assertEquals(AstDocument, result.type)
+    // Should have both heading and code block children
+    assertNotNull(result.links.firstChild)
+  }
+
+  // endregion
 }
 
 /** Simple recursive function that recurses [n] times to demonstrate stack overflow. */

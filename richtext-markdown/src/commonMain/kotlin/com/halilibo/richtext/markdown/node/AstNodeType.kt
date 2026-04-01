@@ -177,3 +177,27 @@ public data class AstText(
 ) : AstInlineNodeType()
 
 //endregion
+
+//region AstErrorNodeType
+
+/**
+ * Represents a parse error encountered during AST conversion.
+ * Used when the parser is configured to return partial results
+ * instead of throwing on malformed input.
+ */
+@Immutable
+public data class AstParseError(
+  val message: String
+) : AstNodeType()
+
+/**
+ * Represents an element that was incomplete at the time of parsing,
+ * such as an unclosed delimiter or a truncated block.
+ * The [rawContent] field preserves the original text for potential re-parsing.
+ */
+@Immutable
+public data class AstIncompleteElement(
+  val rawContent: String
+) : AstNodeType()
+
+//endregion
