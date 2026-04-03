@@ -100,7 +100,7 @@ public interface UnorderedMarkers {
  * Creates an [UnorderedMarkers] that will cycle through the values in [markers] for each
  * indentation level.
  */
-public fun @Composable RichTextScope.textUnorderedMarkers(
+public fun RichTextScope.textUnorderedMarkers(
   vararg markers: String
 ): UnorderedMarkers = UnorderedMarkers {
   Text(markers[it % markers.size])
@@ -175,9 +175,6 @@ private val LocalListLevel = compositionLocalOf { 0 }
 
 /**
  * Creates a formatted list such as a bullet list or numbered list.
- *
- * @sample com.halilibo.richtext.ui.previews.OrderedListPreview
- * @sample com.halilibo.richtext.ui.previews.UnorderedListPreview
  */
 // inline is required for https://github.com/halilozercan/compose-richtext/issues/7
 @Suppress("NOTHING_TO_INLINE")
@@ -188,9 +185,6 @@ private val LocalListLevel = compositionLocalOf { 0 }
 
 /**
  * Creates a formatted list such as a bullet list or numbered list.
- *
- * @sample com.halilibo.richtext.ui.previews.OrderedListPreview
- * @sample com.halilibo.richtext.ui.previews.UnorderedListPreview
  */
 @Composable public fun <T> RichTextScope.FormattedList(
   listType: ListType,
@@ -216,7 +210,9 @@ private val LocalListLevel = compositionLocalOf { 0 }
       }
     },
     itemForIndex = { index ->
-      BasicRichText(style = currentRichTextStyle.copy(paragraphSpacing = listStyle.itemSpacing)) {
+      BasicRichText(
+        style = currentRichTextStyle.copy(paragraphSpacing = listStyle.itemSpacing),
+      ) {
         CompositionLocalProvider(LocalListLevel provides currentLevel + 1) {
           drawItem(items[index])
         }
@@ -257,7 +253,7 @@ private val LocalListLevel = compositionLocalOf { 0 }
 
     // Measure the prefixes first.
     val prefixPlaceables = prefixMeasureables.map { marker ->
-      marker.measure(Constraints())
+      marker.measure(constraints)
     }
       .toList()
     val widestPrefix = prefixPlaceables.maxByOrNull { it.width }!!
@@ -273,8 +269,12 @@ private val LocalListLevel = compositionLocalOf { 0 }
     val widestItem = itemPlaceables.maxByOrNull { it.width }!!
 
     val listWidth = widestPrefix.width + widestItem.width
-    val listHeight = itemPlaceables.sumOf { it.height } +
+    val itemsHeight = itemPlaceables.sumOf { it.height } +
         (itemPlaceables.size - 1) * itemSpacing.roundToPx()
+    val prefixesHeight = prefixPlaceables.sumOf { it.height } +
+        (prefixPlaceables.size - 1) * itemSpacing.roundToPx()
+
+    val listHeight = maxOf(itemsHeight, prefixesHeight)
     layout(listWidth, listHeight) {
       var y = 0
 

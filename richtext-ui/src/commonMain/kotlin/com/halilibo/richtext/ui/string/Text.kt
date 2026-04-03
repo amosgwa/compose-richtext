@@ -4,24 +4,19 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextOverflow
-import com.halilibo.richtext.ui.ClickableText
-import com.halilibo.richtext.ui.LinkClickHandler
-import com.halilibo.richtext.ui.LocalLinkClickHandler
 import com.halilibo.richtext.ui.RichTextScope
+import com.halilibo.richtext.ui.Text
 import com.halilibo.richtext.ui.currentContentColor
 import com.halilibo.richtext.ui.currentRichTextStyle
 import com.halilibo.richtext.ui.string.RichTextString.Format
 
 /**
  * Renders a [RichTextString] as created with [richTextString].
- *
- * @sample com.halilibo.richtext.ui.previews.TextPreview
  */
+@Suppress("UnusedBoxWithConstraintsScope")
 @Composable
 public fun RichTextScope.Text(
   text: RichTextString,
@@ -41,27 +36,12 @@ public fun RichTextScope.Text(
   val inlineContents = remember(text) { text.getInlineContents() }
 
   if (inlineContents.isEmpty()) {
-    // cheap path
-    val linkClickHandler = LocalLinkClickHandler.current ?: LocalUriHandler.current
-    ClickableText(
+    Text(
       text = annotated,
       onTextLayout = onTextLayout,
       softWrap = softWrap,
       overflow = overflow,
-      maxLines = maxLines,
-      isOffsetClickable = { offset ->
-        annotated.getConsumableAnnotations(text.formatObjects, offset).any()
-      },
-      onClick = { offset ->
-        annotated.getConsumableAnnotations(text.formatObjects, offset)
-          .firstOrNull()
-          ?.let { link ->
-            when (linkClickHandler) {
-              is LinkClickHandler -> linkClickHandler.onClick(link.destination)
-              is UriHandler -> linkClickHandler.openUri(link.destination)
-            }
-          }
-      }
+      maxLines = maxLines
     )
   } else {
     // expensive constraints reading path
@@ -71,28 +51,13 @@ public fun RichTextScope.Text(
         textConstraints = constraints
       )
 
-      val linkClickHandler = LocalLinkClickHandler.current ?: LocalUriHandler.current
-
-      ClickableText(
+      Text(
         text = annotated,
         onTextLayout = onTextLayout,
         inlineContent = inlineTextContents,
         softWrap = softWrap,
         overflow = overflow,
         maxLines = maxLines,
-        isOffsetClickable = { offset ->
-          annotated.getConsumableAnnotations(text.formatObjects, offset).any()
-        },
-        onClick = { offset ->
-          annotated.getConsumableAnnotations(text.formatObjects, offset)
-            .firstOrNull()
-            ?.let { link ->
-              when (linkClickHandler) {
-                is LinkClickHandler -> linkClickHandler.onClick(link.destination)
-                is UriHandler -> linkClickHandler.openUri(link.destination)
-              }
-            }
-        }
       )
     }
   }

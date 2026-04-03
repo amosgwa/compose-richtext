@@ -13,3 +13,5 @@ build/
 .externalNativeBuild
 .cxx
 /.idea/*
+site/
+docs-gen/
