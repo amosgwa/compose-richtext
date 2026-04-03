@@ -81,7 +81,7 @@ public class RichTextStringStyle(
     strikethroughStyle: SpanStyle? = this.strikethroughStyle,
     subscriptStyle: SpanStyle? = this.subscriptStyle,
     superscriptStyle: SpanStyle? = this.superscriptStyle,
-    codeStyle: SpanStyle? = this.codeStyle,
+    codeStyle: InlineCodeStyle? = this.codeStyle,
     linkStyle: TextLinkStyles? = this.linkStyle
   ): RichTextStringStyle = RichTextStringStyle(
     boldStyle = boldStyle,
