@@ -8,4 +8,4 @@ import com.halilibo.richtext.ui.RichTextScope
  * We are leaving HTML rendering to platform side.
  */
 @Composable
-internal expect fun RichTextScope.HtmlBlock(content: String)
+public expect fun RichTextScope.HtmlBlock(content: String)

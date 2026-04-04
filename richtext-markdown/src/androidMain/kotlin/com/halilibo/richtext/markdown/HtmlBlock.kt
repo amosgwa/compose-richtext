@@ -9,7 +9,7 @@ import com.halilibo.richtext.ui.string.Text
 import com.halilibo.richtext.ui.string.richTextString
 
 @Composable
-internal actual fun RichTextScope.HtmlBlock(content: String) {
+public actual fun RichTextScope.HtmlBlock(content: String) {
   val richTextString = remember(content) {
     richTextString {
       withAnnotatedString {
