@@ -286,6 +286,41 @@ internal class AstNodeConvertKtTest {
     assertTrue("italic" in result, "Expected italic text preserved, got: $result")
   }
 
+  @Test
+  fun `sanitizer closes nested bold and italic`() {
+    val input = "**bold *and italic"
+    val result = sanitizePartialMarkdown(input)
+    // bold ** is unclosed (1 occurrence, odd) → append **
+    // italic * is unclosed (1 single *, odd) → append *
+    // Order: ** then * (bold is appended before italic in the code)
+    assertEquals("**bold *and italic***", result)
+  }
+
+  @Test
+  fun `sanitizer closes bold-italic triple asterisk`() {
+    val input = "***bold-italic text"
+    val result = sanitizePartialMarkdown(input)
+    // *** = one ** (bold) + one single * (italic), both unclosed
+    assertEquals("***bold-italic text***", result)
+  }
+
+  @Test
+  fun `sanitizer respects escaped delimiter before real one`() {
+    // The \* is escaped (not italic), but the second * opens italic
+    val input = "This is \\*not italic *but this is"
+    val result = sanitizePartialMarkdown(input)
+    // Only the unescaped * should be counted and closed
+    assertEquals("This is \\*not italic *but this is*", result)
+  }
+
+  @Test
+  fun `sanitizer closes mixed unclosed code and bold`() {
+    val input = "Some `code and **bold"
+    val result = sanitizePartialMarkdown(input)
+    // 1 unclosed backtick + 1 unclosed ** → append both
+    assertEquals("Some `code and **bold`**", result)
+  }
+
   // region sanitizePartialMarkdown — inline delimiter tests
 
   @Test

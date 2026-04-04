@@ -285,22 +285,36 @@ internal fun sanitizePartialMarkdown(text: String): String {
     suffixes.add("`")
   }
 
-  // Count unescaped ** pairs for bold
-  val boldCount = countPattern(content, "**")
-  if (boldCount % 2 != 0) {
+  // Count asterisk runs to determine unclosed bold/italic.
+  // Each run of N asterisks contributes N/2 bold delimiters and N%2 italic delimiters.
+  // This correctly handles *, **, ***, and longer runs.
+  var boldDelimiters = 0
+  var italicDelimiters = 0
+  run {
+    var i = 0
+    while (i < content.length) {
+      if (content[i] == '\\') { i += 2; continue }
+      if (content[i] == '*') {
+        var runLen = 0
+        while (i < content.length && content[i] == '*') { runLen++; i++ }
+        boldDelimiters += runLen / 2
+        italicDelimiters += runLen % 2
+      } else {
+        i++
+      }
+    }
+  }
+  if (boldDelimiters % 2 != 0) {
     suffixes.add("**")
+  }
+  if (italicDelimiters % 2 != 0) {
+    suffixes.add("*")
   }
 
   // Count unescaped ~~ pairs for strikethrough
   val strikethroughCount = countPattern(content, "~~")
   if (strikethroughCount % 2 != 0) {
     suffixes.add("~~")
-  }
-
-  // Count unescaped single * for italic (exclude ** pairs already counted)
-  val singleStarCount = countSingleDelimiters(content, '*')
-  if (singleStarCount % 2 != 0) {
-    suffixes.add("*")
   }
 
   for (suffix in suffixes) {
@@ -340,29 +354,6 @@ private fun countPattern(text: String, pattern: String): Int {
         count++
       }
       i += pattern.length
-    } else {
-      i++
-    }
-  }
-  return count
-}
-
-private fun countSingleDelimiters(text: String, char: Char): Int {
-  var count = 0
-  var i = 0
-  while (i < text.length) {
-    if (text[i] == '\\') {
-      i += 2
-      continue
-    }
-    if (text[i] == char) {
-      // Check it's a single occurrence, not part of a double
-      val next = if (i + 1 < text.length) text[i + 1] else ' '
-      val prev = if (i > 0) text[i - 1] else ' '
-      if (next != char && prev != char) {
-        count++
-      }
-      i++
     } else {
       i++
     }
