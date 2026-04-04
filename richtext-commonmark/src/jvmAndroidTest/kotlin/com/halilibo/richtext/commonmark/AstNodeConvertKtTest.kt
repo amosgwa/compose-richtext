@@ -264,6 +264,28 @@ internal class AstNodeConvertKtTest {
 
   // endregion
 
+  @Test
+  fun `sanitizer strips trailing backslash`() {
+    val input = "Hello world\\"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("Hello world", result)
+  }
+
+  @Test
+  fun `sanitizer preserves escaped characters`() {
+    val input = "Hello \\* world"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals(input, result)
+  }
+
+  @Test
+  fun `sanitizer strips trailing backslash before closing delimiters`() {
+    val input = "This is *italic\\"
+    val result = sanitizePartialMarkdown(input)
+    assertTrue(result.endsWith("*"), "Expected closing *, got: $result")
+    assertTrue("italic" in result, "Expected italic text preserved, got: $result")
+  }
+
   // region sanitizePartialMarkdown — inline delimiter tests
 
   @Test

@@ -242,6 +242,12 @@ internal fun convert(
 internal fun sanitizePartialMarkdown(text: String): String {
   val sb = StringBuilder(text)
 
+  // 0. Strip trailing backslash — it may be the start of an escape sequence
+  //    that hasn't arrived yet. Rendering a bare "\" looks wrong.
+  if (sb.isNotEmpty() && sb[sb.length - 1] == '\\') {
+    sb.deleteCharAt(sb.length - 1)
+  }
+
   // 1. Close unclosed fenced code blocks (``` or ~~~)
   var fencePattern: String? = null
   for (line in text.lines()) {
