@@ -11,7 +11,6 @@ plugins {
 dependencies {
   // keep in sync with Dependencies.BuildPlugins.androidGradlePlugin
   implementation("com.android.tools.build:gradle:9.1.0")
-  implementation("com.vanniktech.maven.publish:com.vanniktech.maven.publish.gradle.plugin:0.36.0")
   // keep in sync with Dependencies.Kotlin.gradlePlugin
   implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.10")
   // keep in sync with Dependencies.Compose.desktopVersion
