@@ -469,6 +469,36 @@ private fun nextLineStart(content: String, from: Int): Int {
 private fun stripIncompleteLinks(sb: StringBuilder) {
   val text = sb.toString()
 
+  // Case 0: `[label]` with nothing after the `]` yet — an incipient link or
+  // footnote whose `(url)` (or nothing) hasn't streamed in. It's undecidable at
+  // this instant whether a link is coming, so render the bare label and let the
+  // brackets/link "appear" when it resolves (plain -> [1] / plain -> link). That
+  // additive transition reads better than showing `[label]` and then stripping
+  // the brackets away. Only applies while `]` is the final char; once anything
+  // follows it the construct has settled (a space rules out a link; a `(` is
+  // handled by Case 1 below).
+  if (text.endsWith("]")) {
+    var depth = 0
+    var j = text.length - 1
+    while (j >= 0) {
+      when (text[j]) {
+        ']' -> depth++
+        '[' -> {
+          depth--
+          if (depth == 0) {
+            val isImage = j > 0 && text[j - 1] == '!'
+            val removeFrom = if (isImage) j - 1 else j
+            val label = text.substring(j + 1, text.length - 1)
+            sb.delete(removeFrom, sb.length)
+            sb.append(label)
+            return
+          }
+        }
+      }
+      j--
+    }
+  }
+
   // Case 1: `[text](url` — bracket is closed but paren is not.
   // Find the last `](` and check if it has a matching `)`.
   val lastBracketParen = text.lastIndexOf("](")
