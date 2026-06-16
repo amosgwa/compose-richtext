@@ -1,3 +1,4 @@
+import org.gradle.api.publish.maven.MavenPublication
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -15,6 +16,24 @@ plugins {
 // "compose-richtext:…:unspecified".
 group = providers.gradleProperty("GROUP").get()
 version = providers.gradleProperty("VERSION_NAME").get()
+
+// Re-declare the Apache-2.0 license on every publication's POM. The vanniktech
+// plugin used to emit this; bare maven-publish does not, so consumers' Licensee
+// checks fail with "Artifact declares no licenses!". Name/url mirror the prior
+// (vanniktech) POMs so SPDX matching keeps resolving to Apache-2.0.
+publishing {
+  publications.withType(MavenPublication::class.java).configureEach {
+    pom {
+      licenses {
+        license {
+          name.set("The Apache Software License, Version 2.0")
+          url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+          distribution.set("repo")
+        }
+      }
+    }
+  }
+}
 
 repositories {
   google()
