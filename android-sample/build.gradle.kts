@@ -1,7 +1,10 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
   id("com.android.application")
   kotlin("android")
-  id("org.jetbrains.compose") version Compose.desktopVersion
+  id("org.jetbrains.compose")
+  id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -21,20 +24,17 @@ android {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
   }
-  kotlinOptions {
-    jvmTarget = "11"
-  }
+}
 
-  composeOptions {
-    kotlinCompilerExtensionVersion = Compose.compilerVersion
+kotlin {
+  compilerOptions {
+    jvmTarget = JvmTarget.JVM_11
   }
 }
 
 dependencies {
-  implementation(project(":printing"))
   implementation(project(":richtext-commonmark"))
   implementation(project(":richtext-ui-material3"))
-  implementation(project(":slideshow"))
   implementation(AndroidX.appcompat)
   implementation(Compose.activity)
   implementation(compose.foundation)

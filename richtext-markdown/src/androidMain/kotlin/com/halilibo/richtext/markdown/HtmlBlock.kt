@@ -1,26 +1,21 @@
 package com.halilibo.richtext.markdown
 
-import android.os.Build.VERSION
-import android.os.Build.VERSION_CODES
-import android.text.Html
-import android.widget.TextView
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.fromHtml
+import com.halilibo.richtext.ui.RichTextScope
+import com.halilibo.richtext.ui.string.Text
+import com.halilibo.richtext.ui.string.richTextString
 
 @Composable
-public actual fun HtmlBlock(content: String) {
-  AndroidView(
-    factory = { context ->
-      // TODO: pass current styling to legacy TextView
-      TextView(context)
-    },
-    update = {
-      it.text = if (VERSION.SDK_INT >= VERSION_CODES.N) {
-        Html.fromHtml(content, 0)
-      } else {
-        @Suppress("DEPRECATION")
-        Html.fromHtml(content)
+public actual fun RichTextScope.HtmlBlock(content: String) {
+  val richTextString = remember(content) {
+    richTextString {
+      withAnnotatedString {
+        append(AnnotatedString.Companion.fromHtml(content))
       }
     }
-  )
+  }
+  Text(richTextString)
 }
