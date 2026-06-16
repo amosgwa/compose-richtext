@@ -264,6 +264,7 @@ internal fun sanitizePartialMarkdown(text: String): String {
       }
     }
   }
+  val hadOpenFence = fencePattern != null
   if (fencePattern != null) {
     sb.append("\n").append(fencePattern)
   }
@@ -274,91 +275,183 @@ internal fun sanitizePartialMarkdown(text: String): String {
   //    display text (if any) as plain text.
   stripIncompleteLinks(sb)
 
-  // 3. Close unclosed inline delimiters by counting unescaped occurrences.
-  //    Process the (potentially patched) text after prior fixes.
+  // 2.5. Strip a trailing run of inline delimiters that hasn't finished
+  //      streaming — a bare opener ("The **") or a partial closer ("**word*").
+  //      Both otherwise get over-closed into empty spans ("The ****",
+  //      "**word****") that render as literal **/**** garble. Dropping the
+  //      unfinished run lets step 3 rebalance against the real openers. Skipped
+  //      right after closing a fence, where a trailing run is the appended fence
+  //      marker / literal code, not an inline delimiter.
+  if (!hadOpenFence) {
+    stripTrailingPartialDelimiters(sb)
+  }
+
+  // 3. Balance unclosed inline delimiters, ignoring anything inside code
+  //    (inline spans and fenced blocks) where * / ` / ~ are literal.
   val content = sb.toString()
-  val suffixes = mutableListOf<String>()
+  val suffixes = computeClosingSuffixes(content)
 
-  // Count unescaped backticks for inline code
-  val backtickCount = countUnescaped(content, '`')
-  if (backtickCount % 2 != 0) {
-    suffixes.add("`")
-  }
-
-  // Count asterisk runs to determine unclosed bold/italic.
-  // Each run of N asterisks contributes N/2 bold delimiters and N%2 italic delimiters.
-  // This correctly handles *, **, ***, and longer runs.
-  var boldDelimiters = 0
-  var italicDelimiters = 0
-  run {
-    var i = 0
-    while (i < content.length) {
-      if (content[i] == '\\') { i += 2; continue }
-      if (content[i] == '*') {
-        var runLen = 0
-        while (i < content.length && content[i] == '*') { runLen++; i++ }
-        boldDelimiters += runLen / 2
-        italicDelimiters += runLen % 2
-      } else {
-        i++
-      }
-    }
-  }
-  if (boldDelimiters % 2 != 0) {
-    suffixes.add("**")
-  }
-  if (italicDelimiters % 2 != 0) {
-    suffixes.add("*")
-  }
-
-  // Count unescaped ~~ pairs for strikethrough
-  val strikethroughCount = countPattern(content, "~~")
-  if (strikethroughCount % 2 != 0) {
-    suffixes.add("~~")
-  }
-
+  // Insert the closing delimiters immediately after the last non-whitespace
+  // character. Appending them after trailing whitespace would leave a space
+  // before the closer ("**word **"), which CommonMark refuses to bind (closers
+  // can't be preceded by whitespace) — so the markers would render literally.
+  var insertAt = sb.length
+  while (insertAt > 0 && sb[insertAt - 1].isWhitespace()) insertAt--
   for (suffix in suffixes) {
-    sb.append(suffix)
+    sb.insert(insertAt, suffix)
+    insertAt += suffix.length
   }
 
   return sb.toString()
 }
 
-private fun countUnescaped(text: String, char: Char): Int {
-  var count = 0
-  var i = 0
-  while (i < text.length) {
-    if (text[i] == '\\') {
-      i += 2
-      continue
-    }
-    if (text[i] == char) count++
-    i++
+/**
+ * Removes a trailing run of inline emphasis/code delimiters (`*`, `~`, `` ` ``)
+ * that hasn't finished streaming. Two cases both render as literal-marker garble
+ * if left for the close-counting step:
+ *  - a bare opener with no content yet — `The **` would get a `**` appended,
+ *    producing the empty span `The ****`.
+ *  - a partial closer mid-arrival — `**word*` (only the first `*` of the closing
+ *    `**` has arrived) over-appends to `**word****`, rendering bold "word" plus a
+ *    literal `**`.
+ * Dropping the unfinished run lets the close-counting step rebalance against the
+ * real openers, so the text renders cleanly until the delimiter finishes
+ * arriving (e.g. `**word*` -> `**word` -> `**word**`).
+ *
+ * A run preceded by a newline is a line-start construct (e.g. a closing code
+ * fence) and is left untouched; an escaped delimiter (`\*`) is a literal
+ * character and is never stripped.
+ */
+private fun stripTrailingPartialDelimiters(sb: StringBuilder) {
+  // Locate the trailing delimiter run, ignoring any trailing whitespace.
+  var end = sb.length
+  while (end > 0 && sb[end - 1].isWhitespace()) end--
+  var runStart = end
+  while (runStart > 0) {
+    val ch = sb[runStart - 1]
+    if (ch != '*' && ch != '~' && ch != '`') break
+    // Stop at an escaped delimiter (odd number of preceding backslashes): it is a
+    // literal character, not markup, so it must not be stripped.
+    var b = runStart - 2
+    var backslashes = 0
+    while (b >= 0 && sb[b] == '\\') { backslashes++; b-- }
+    if (backslashes % 2 == 1) break
+    runStart--
   }
-  return count
+  if (runStart == end) return // no trailing (unescaped) delimiter run
+  val before = if (runStart > 0) sb[runStart - 1] else ' '
+  if (before == '\n' || before == '\r') {
+    // Line-start run. Keep a real fence marker (>= 3 identical backticks/tildes,
+    // e.g. a closing fence of a complete block); strip anything shorter — a
+    // partial fence marker still streaming in, or a stray line-start emphasis
+    // opener — which would otherwise render as literal markers.
+    val run = sb.substring(runStart, end)
+    val isFence = run.length >= 3 && (run.all { it == '`' } || run.all { it == '~' })
+    if (isFence) return
+  }
+  sb.delete(runStart, sb.length)
 }
 
-private fun countPattern(text: String, pattern: String): Int {
-  var count = 0
+/**
+ * Computes the closing delimiters needed to balance [content], ignoring any
+ * characters inside code — inline spans and fenced blocks — where `*`, `` ` ``,
+ * and `~` are literal, not markup. Backslash-escaped delimiters outside code are
+ * skipped too. Suffixes are returned in append order (backtick, bold, italic,
+ * strikethrough) so a `***` closes both italic and bold.
+ *
+ * Fenced blocks are detected and closed separately by the caller; here they are
+ * only skipped so their contents don't pollute the inline counts.
+ */
+private fun computeClosingSuffixes(content: String): List<String> {
+  var inFence = false
+  var fenceMarker = ""
+  var inInlineCode = false
+  var bold = 0
+  var italic = 0
+  var strike = 0
+  var atLineStart = true
   var i = 0
-  while (i <= text.length - pattern.length) {
-    if (text[i] == '\\') {
-      i += 2
+  while (i < content.length) {
+    // Fenced code blocks are line-based: skip their content entirely.
+    if (atLineStart && !inInlineCode) {
+      // Only the current line — trimStart() over the whole rest would eat the
+      // newline and conflate a blank line with the line that follows it.
+      val lineEnd = content.indexOf('\n', i).let { if (it == -1) content.length else it }
+      val trimmed = content.substring(i, lineEnd).trimStart()
+      if (inFence) {
+        if (trimmed.startsWith(fenceMarker)) {
+          inFence = false
+          fenceMarker = ""
+        }
+        i = nextLineStart(content, i)
+        atLineStart = true
+        continue
+      } else if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+        inFence = true
+        fenceMarker = if (trimmed.startsWith("```")) "```" else "~~~"
+        i = nextLineStart(content, i)
+        atLineStart = true
+        continue
+      }
+    }
+    if (inFence) {
+      i = nextLineStart(content, i)
+      atLineStart = true
       continue
     }
-    if (text.substring(i, i + pattern.length) == pattern) {
-      // Make sure it's not a longer run (e.g. *** should not double-count **)
-      val before = if (i > 0) text[i - 1] else ' '
-      val after = if (i + pattern.length < text.length) text[i + pattern.length] else ' '
-      if (before != pattern[0] && after != pattern[0]) {
-        count++
+
+    val c = content[i]
+    when {
+      c == '\n' -> {
+        i++
+        atLineStart = true
       }
-      i += pattern.length
-    } else {
-      i++
+      c == '\\' && !inInlineCode -> {
+        i += 2 // escaped character — literal
+        atLineStart = false
+      }
+      c == '`' -> {
+        while (i < content.length && content[i] == '`') i++ // consume the backtick run
+        inInlineCode = !inInlineCode
+        atLineStart = false
+      }
+      inInlineCode -> {
+        i++ // literal inside an inline code span
+        atLineStart = false
+      }
+      c == '*' -> {
+        var runLen = 0
+        while (i < content.length && content[i] == '*') {
+          runLen++
+          i++
+        }
+        bold += runLen / 2
+        italic += runLen % 2
+        atLineStart = false
+      }
+      c == '~' && i + 1 < content.length && content[i + 1] == '~' -> {
+        strike++
+        i += 2
+        atLineStart = false
+      }
+      else -> {
+        i++
+        atLineStart = false
+      }
     }
   }
-  return count
+  return buildList {
+    if (inInlineCode) add("`")
+    if (bold % 2 != 0) add("**")
+    if (italic % 2 != 0) add("*")
+    if (strike % 2 != 0) add("~~")
+  }
+}
+
+/** Index just past the next newline at or after [from], or the end of [content]. */
+private fun nextLineStart(content: String, from: Int): Int {
+  val nl = content.indexOf('\n', from)
+  return if (nl == -1) content.length else nl + 1
 }
 
 /**

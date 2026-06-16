@@ -314,11 +314,13 @@ internal class AstNodeConvertKtTest {
   }
 
   @Test
-  fun `sanitizer closes mixed unclosed code and bold`() {
+  fun `sanitizer closes unclosed inline code and leaves enclosed asterisks literal`() {
     val input = "Some `code and **bold"
     val result = sanitizePartialMarkdown(input)
-    // 1 unclosed backtick + 1 unclosed ** → append both
-    assertEquals("Some `code and **bold`**", result)
+    // The ** is inside the (unclosed) code span, so it is literal — only the
+    // backtick is closed. Appending a ** as well would leave a stray ** after
+    // the code span.
+    assertEquals("Some `code and **bold`", result)
   }
 
   // region sanitizePartialMarkdown — inline delimiter tests
@@ -381,6 +383,102 @@ internal class AstNodeConvertKtTest {
 
   // endregion
 
+  // region sanitizePartialMarkdown — bare opener stripping
+  // A delimiter run that has just streamed in with no content after it must be
+  // dropped, not closed: closing it produces an empty span (e.g. "The **" ->
+  // "The ****") that CommonMark renders as the literal **/**** garble.
+
+  @Test
+  fun `sanitizer strips trailing bare bold opener instead of creating empty span`() {
+    val input = "The space between **"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("The space between ", result)
+  }
+
+  @Test
+  fun `sanitizer strips trailing bare italic opener`() {
+    val input = "Hello *"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("Hello ", result)
+  }
+
+  @Test
+  fun `sanitizer strips trailing bare inline code opener`() {
+    val input = "Run `"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("Run ", result)
+  }
+
+  @Test
+  fun `sanitizer strips trailing bare strikethrough opener`() {
+    val input = "Done ~~"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("Done ", result)
+  }
+
+  @Test
+  fun `sanitizer still closes a bold opener once it has content`() {
+    val input = "The **space"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("The **space**", result)
+  }
+
+  @Test
+  fun `sanitizer preserves a complete trailing bold span`() {
+    val input = "This is **bold**"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals(input, result)
+  }
+
+  @Test
+  fun `sanitizer rebalances a partial bold closer`() {
+    // Only the first asterisk of the closing ** has arrived.
+    val input = "I was **capturing*"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("I was **capturing**", result)
+  }
+
+  @Test
+  fun `sanitizer rebalances a partial strikethrough closer`() {
+    val input = "this is ~~struck~"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("this is ~~struck~~", result)
+  }
+
+  // endregion
+
+  // region sanitizePartialMarkdown — code-aware counting + escapes
+
+  @Test
+  fun `sanitizer ignores asterisks inside a complete inline code span`() {
+    val input = "The `a * b` value is set."
+    val result = sanitizePartialMarkdown(input)
+    assertEquals(input, result)
+  }
+
+  @Test
+  fun `sanitizer closes inline code containing asterisks without leaking a marker`() {
+    val input = "The `a * b"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("The `a * b`", result)
+  }
+
+  @Test
+  fun `sanitizer ignores asterisks inside a fenced code block`() {
+    val input = "```\nx = a ** b\n```"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals(input, result)
+  }
+
+  @Test
+  fun `sanitizer does not strip an escaped trailing asterisk`() {
+    val input = "show a literal \\*"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals(input, result)
+  }
+
+  // endregion
+
   // region RETURN_PARTIAL failure policy tests
 
   @Test
@@ -408,7 +506,73 @@ internal class AstNodeConvertKtTest {
   }
 
   // endregion
+
+  // region streaming sweep — no garble in ANY prefix (streaming bug hunt)
+  // Stream each realistic fixture one character at a time and assert no prefix
+  // ever leaks a literal emphasis/code marker into rendered *text*. Code spans
+  // legitimately contain markers, so only AstText literals are checked. This is
+  // the adversarial net the opener/closer regressions slipped past.
+
+  @Test
+  fun `streaming sweep leaks no literal markers into rendered text for any prefix`() {
+    val parser = CommonmarkAstNodeParser(CommonMarkdownParseOptions.Streaming)
+    val failures = mutableListOf<String>()
+    for (fixture in STREAMING_SWEEP_FIXTURES) {
+      for (len in 0..fixture.length) {
+        val prefix = fixture.substring(0, len)
+        val leaked = collectTextLiterals(parser.parse(prefix))
+          .filter { it.contains('*') || it.contains('`') || it.contains('~') }
+        if (leaked.isNotEmpty()) failures += "prefix=<<$prefix>> leaked=$leaked"
+      }
+    }
+    assertTrue(
+      failures.isEmpty(),
+      "Streaming sweep leaked literal markers into text:\n" + failures.joinToString("\n"),
+    )
+  }
+
+  // endregion
 }
+
+/** Collects the literal of every AstText node (regular text only; code spans/blocks excluded). */
+private fun collectTextLiterals(root: AstNode): List<String> {
+  val out = mutableListOf<String>()
+  val stack = ArrayDeque<AstNode>()
+  stack.addLast(root)
+  while (stack.isNotEmpty()) {
+    val node = stack.removeLast()
+    (node.type as? AstText)?.let { out.add(it.literal) }
+    var child = node.links.firstChild
+    while (child != null) {
+      stack.addLast(child)
+      child = child.links.next
+    }
+  }
+  return out
+}
+
+/**
+ * Realistic Pi-style responses for the streaming sweep. Plain text deliberately
+ * contains NO literal *, `, or ~~ (only formatting uses them), so any such
+ * character appearing in rendered text means the sanitizer leaked a partial
+ * delimiter.
+ */
+private val STREAMING_SWEEP_FIXTURES = listOf(
+  "I was **capturing** the moment. The **space** between every **word pair** matters.",
+  "This is **bold** and *italic* and `code` and ~~struck~~, all together now.",
+  "Mixed **bold with *nested italic* inside** and a trailing **bold** word.",
+  "Use the `parser.parse(text)` call, then **render** the `node` it returns.",
+  "Visit [the docs](https://example.com/streaming) and [the ticket](https://example.com/pi) now.",
+  "Nested **outer `inner code` outer** then a final ~~strike~~ here.",
+  "## Heading line\n\nA paragraph with **bold** and a list:\n\n- first **item**\n- second `item`\n- third *item*",
+  "***Important***: read the **`config`** file and the *notes* below carefully.",
+  "Steps are **one**, **two**, and **three**, then ~~skip~~ the last one.",
+  "Click **[the dashboard](https://example.com/dash)** and then *confirm* it.",
+  "Edge cases: ***triple***, then **bold**, then *italic*, then `code` mixed.",
+  "The `arr[i] * 2` expression and `kwargs` are passed to **build** then done.",
+  "Inline `a ** b` math, then **bold**, then `c ~~ d` and back to plain text.",
+  "Power op:\n\n```py\nx = a ** b  # not bold\n```\n\nThen a **bold** word after.",
+)
 
 /** Simple recursive function that recurses [n] times to demonstrate stack overflow. */
 private fun countRecursively(n: Int): Int {
