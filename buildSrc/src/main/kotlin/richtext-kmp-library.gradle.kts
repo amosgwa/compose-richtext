@@ -9,6 +9,13 @@ plugins {
   id("signing")
 }
 
+// Coordinates for published artifacts. The Maven Central (vanniktech) plugin used to
+// derive these from GROUP/VERSION_NAME; after dropping it for JitPack, wire them onto
+// the bare maven-publish plugin so publications get real coordinates instead of
+// "compose-richtext:…:unspecified".
+group = providers.gradleProperty("GROUP").get()
+version = providers.gradleProperty("VERSION_NAME").get()
+
 repositories {
   google()
   mavenCentral()
