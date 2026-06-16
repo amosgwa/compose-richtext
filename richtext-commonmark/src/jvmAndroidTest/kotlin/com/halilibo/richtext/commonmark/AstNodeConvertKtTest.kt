@@ -242,6 +242,29 @@ internal class AstNodeConvertKtTest {
   }
 
   @Test
+  fun `sanitizer strips a trailing closed bracket to its label`() {
+    // Incipient link/footnote: ] is the final char, (url) not arrived yet.
+    val input = "See [the docs]"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("See the docs", result)
+  }
+
+  @Test
+  fun `sanitizer strips a trailing closed image bracket to its alt`() {
+    val input = "Here ![diagram]"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("Here diagram", result)
+  }
+
+  @Test
+  fun `sanitizer keeps a closed bracket once content follows it`() {
+    // No longer trailing → settled; leave it (brackets/link appear, not vanish).
+    val input = "See [the docs] now"
+    val result = sanitizePartialMarkdown(input)
+    assertEquals("See [the docs] now", result)
+  }
+
+  @Test
   fun `sanitizer preserves complete image links`() {
     val input = "See ![alt](https://example.com/img.png) here"
     val result = sanitizePartialMarkdown(input)
